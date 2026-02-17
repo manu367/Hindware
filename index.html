@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tailwind Todo List</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen">
+  <main class="max-w-3xl mx-auto px-4 py-10">
+    <section class="bg-white rounded-xl shadow-md p-6">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h1 class="text-2xl font-bold text-slate-800">Todo List</h1>
+        <button id="openCreateBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition">
+          + Create Todo
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2 mb-4">
+        <label for="statusFilter" class="text-sm font-medium text-slate-700">View:</label>
+        <select id="statusFilter" class="border border-slate-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="active">Active</option>
+          <option value="deleted">Soft Deleted</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+
+      <ul id="todoList" class="space-y-3"></ul>
+      <p id="emptyState" class="text-center text-slate-500 py-8 hidden">No todos available for this view.</p>
+    </section>
+  </main>
+
+  <div id="todoModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-[1px] items-center justify-center px-4">
+    <div class="bg-white w-full max-w-md rounded-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 id="modalTitle" class="text-xl font-semibold text-slate-800">Create Todo</h2>
+        <button id="closeModalBtn" class="text-slate-500 hover:text-slate-700 text-xl leading-none">&times;</button>
+      </div>
+
+      <form id="todoForm" class="space-y-4">
+        <div>
+          <label for="todoTitle" class="block text-sm font-medium text-slate-700 mb-1">Title</label>
+          <input id="todoTitle" type="text" required class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter task title" />
+        </div>
+
+        <div>
+          <label for="todoDescription" class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+          <textarea id="todoDescription" rows="3" class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Optional details"></textarea>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="cancelModalBtn" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100">Cancel</button>
+          <button type="submit" id="submitBtn" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const todoList = document.getElementById('todoList');
+    const emptyState = document.getElementById('emptyState');
+    const statusFilter = document.getElementById('statusFilter');
+
+    const todoModal = document.getElementById('todoModal');
+    const openCreateBtn = document.getElementById('openCreateBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const cancelModalBtn = document.getElementById('cancelModalBtn');
+
+    const modalTitle = document.getElementById('modalTitle');
+    const todoForm = document.getElementById('todoForm');
+    const todoTitle = document.getElementById('todoTitle');
+    const todoDescription = document.getElementById('todoDescription');
+    const submitBtn = document.getElementById('submitBtn');
+
+    let todos = [];
+    let editingId = null;
+
+    const createTodo = ({ title, description }) => ({
+      id: crypto.randomUUID(),
+      title,
+      description,
+      deletedAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: null,
+    });
+
+    const openModal = (mode, todo = null) => {
+      todoModal.classList.remove('hidden');
+      todoModal.classList.add('flex');
+
+      if (mode === 'create') {
+        editingId = null;
+        modalTitle.textContent = 'Create Todo';
+        submitBtn.textContent = 'Create';
+        todoForm.reset();
+      } else {
+        editingId = todo.id;
+        modalTitle.textContent = 'Update Todo';
+        submitBtn.textContent = 'Update';
+        todoTitle.value = todo.title;
+        todoDescription.value = todo.description;
+      }
+
+      todoTitle.focus();
+    };
+
+    const closeModal = () => {
+      todoModal.classList.add('hidden');
+      todoModal.classList.remove('flex');
+      todoForm.reset();
+      editingId = null;
+    };
+
+    const softDeleteTodo = (id) => {
+      todos = todos.map((todo) =>
+        todo.id === id ? { ...todo, deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : todo
+      );
+      renderTodos();
+    };
+
+    const restoreTodo = (id) => {
+      todos = todos.map((todo) =>
+        todo.id === id ? { ...todo, deletedAt: null, updatedAt: new Date().toISOString() } : todo
+      );
+      renderTodos();
+    };
+
+    const renderTodos = () => {
+      const view = statusFilter.value;
+      const visibleTodos = todos.filter((todo) => {
+        if (view === 'active') return !todo.deletedAt;
+        if (view === 'deleted') return Boolean(todo.deletedAt);
+        return true;
+      });
+
+      todoList.innerHTML = visibleTodos
+        .map((todo) => {
+          const isDeleted = Boolean(todo.deletedAt);
+          return `
+            <li class="border border-slate-200 rounded-lg p-4 ${isDeleted ? 'bg-slate-50' : 'bg-white'}">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <h3 class="font-semibold text-slate-800 ${isDeleted ? 'line-through text-slate-500' : ''}">${todo.title}</h3>
+                  <p class="text-sm mt-1 ${isDeleted ? 'text-slate-400' : 'text-slate-600'}">${todo.description || 'No description'}</p>
+                  <p class="text-xs text-slate-400 mt-2">Updated: ${new Date(todo.updatedAt || todo.createdAt).toLocaleString()}</p>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-2">
+                  <button data-action="edit" data-id="${todo.id}" class="px-3 py-1.5 rounded-md text-sm bg-amber-100 text-amber-700 hover:bg-amber-200 ${isDeleted ? 'opacity-50 cursor-not-allowed' : ''}" ${isDeleted ? 'disabled' : ''}>Edit</button>
+                  <button data-action="${isDeleted ? 'restore' : 'delete'}" data-id="${todo.id}" class="px-3 py-1.5 rounded-md text-sm ${isDeleted ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-rose-100 text-rose-700 hover:bg-rose-200'}">${isDeleted ? 'Restore' : 'Soft Delete'}</button>
+                </div>
+              </div>
+            </li>
+          `;
+        })
+        .join('');
+
+      emptyState.classList.toggle('hidden', visibleTodos.length > 0);
+    };
+
+    openCreateBtn.addEventListener('click', () => openModal('create'));
+    [closeModalBtn, cancelModalBtn].forEach((button) => button.addEventListener('click', closeModal));
+
+    todoModal.addEventListener('click', (event) => {
+      if (event.target === todoModal) closeModal();
+    });
+
+    statusFilter.addEventListener('change', renderTodos);
+
+    todoForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+
+      const title = todoTitle.value.trim();
+      const description = todoDescription.value.trim();
+      if (!title) return;
+
+      if (editingId) {
+        todos = todos.map((todo) =>
+          todo.id === editingId
+            ? { ...todo, title, description, updatedAt: new Date().toISOString() }
+            : todo
+        );
+      } else {
+        todos = [createTodo({ title, description }), ...todos];
+      }
+
+      closeModal();
+      renderTodos();
+    });
+
+    todoList.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-action]');
+      if (!button) return;
+
+      const { action, id } = button.dataset;
+      const todo = todos.find((item) => item.id === id);
+      if (!todo) return;
+
+      if (action === 'edit') {
+        openModal('edit', todo);
+      } else if (action === 'delete') {
+        softDeleteTodo(id);
+      } else if (action === 'restore') {
+        restoreTodo(id);
+      }
+    });
+
+    todos = [
+      createTodo({ title: 'Design homepage', description: 'Create hero section and navigation.' }),
+      createTodo({ title: 'Write API docs', description: 'Document todo endpoints and auth flow.' }),
+    ];
+    renderTodos();
+  </script>
+</body>
+</html>
